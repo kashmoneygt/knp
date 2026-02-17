@@ -34,10 +34,11 @@
       text-align: center;
       animation: fadeInUp 2.5s ease forwards;
       opacity: 0;
+      max-width: 90vw;
     }
 
     .main-message {
-      font-size: clamp(2rem, 5vw, 3.8rem);
+      font-size: clamp(1.6rem, 5vw, 3.8rem);
       font-weight: 700;
       color: #fff;
       text-shadow:
@@ -46,17 +47,19 @@
         0 0 100px rgba(200, 50, 100, 0.4);
       letter-spacing: 0.03em;
       line-height: 1.2;
+      padding: 0 0.5rem;
     }
 
     .sub-message {
       margin-top: 1rem;
-      font-size: clamp(1rem, 2.5vw, 1.5rem);
+      font-size: clamp(0.85rem, 2.5vw, 1.5rem);
       color: rgba(255, 210, 230, 0.92);
       text-shadow:
         0 0 15px rgba(255, 130, 170, 0.7),
         0 0 35px rgba(255, 100, 140, 0.4);
       font-style: italic;
       letter-spacing: 0.04em;
+      padding: 0 0.5rem;
     }
 
     .divider {
@@ -71,6 +74,24 @@
       100% { opacity: 1; transform: translateY(0); }
     }
 
+    /* Mobile tweaks */
+    @media (max-width: 767px) {
+      #overlay {
+        padding-bottom: 3vh;
+      }
+      .main-message {
+        font-size: clamp(1.4rem, 6.5vw, 2.2rem);
+      }
+      .sub-message {
+        font-size: clamp(0.8rem, 4vw, 1.1rem);
+        margin-top: 0.6rem;
+      }
+      .divider {
+        width: 140px;
+        margin: 0.6rem auto;
+      }
+    }
+
     /* Petal-shaped sparkles floating up */
     .sparkle {
       position: fixed;
@@ -79,6 +100,19 @@
       border-radius: 50%;
       pointer-events: none;
       z-index: 5;
+    }
+
+    /* Hint for orbit controls */
+    #hint {
+      position: fixed;
+      bottom: 1.2rem;
+      right: 1.2rem;
+      color: rgba(255, 200, 220, 0.45);
+      font-size: 0.7rem;
+      font-family: Georgia, serif;
+      pointer-events: none;
+      z-index: 20;
+      letter-spacing: 0.06em;
     }
   </style>
 </head>
@@ -93,11 +127,20 @@
     </div>
   </div>
 
+  <div id="hint">drag to explore</div>
+
   <!-- Three.js from CDN -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <!-- OrbitControls matching r128 -->
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 
   <script>
   (function() {
+    // ─────────────────────────────────────────────────────────────────────────
+    // MOBILE DETECTION
+    // ─────────────────────────────────────────────────────────────────────────
+    const isMobile = window.innerWidth < 768;
+
     // ─────────────────────────────────────────────────────────────────────────
     // SCENE SETUP
     // ─────────────────────────────────────────────────────────────────────────
@@ -117,8 +160,29 @@
     scene.fog = new THREE.FogExp2(0x0a0008, 0.04);
 
     const camera = new THREE.PerspectiveCamera(55, W / H, 0.1, 200);
-    camera.position.set(0, 2, 12);
+    // Pull camera a bit closer on mobile so the scene fills the screen
+    camera.position.set(0, 2, isMobile ? 9 : 12);
     camera.lookAt(0, 1, 0);
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // ORBIT CONTROLS
+    // ─────────────────────────────────────────────────────────────────────────
+    const controls = new THREE.OrbitControls(camera, renderer.domElement);
+    controls.enableDamping  = true;
+    controls.dampingFactor  = 0.05;
+    controls.autoRotate     = false;
+    controls.target.set(0, 1.2, 0);
+    // Limit vertical range so the scene stays pleasant
+    controls.minPolarAngle = Math.PI * 0.1;
+    controls.maxPolarAngle = Math.PI * 0.75;
+    controls.update();
+
+    // Fade hint out after first interaction
+    const hintEl = document.getElementById('hint');
+    renderer.domElement.addEventListener('pointerdown', () => {
+      hintEl.style.transition = 'opacity 0.8s';
+      hintEl.style.opacity = '0';
+    }, { once: true });
 
     // ─────────────────────────────────────────────────────────────────────────
     // STARFIELD BACKGROUND
@@ -297,11 +361,15 @@
       return group;
     }
 
-    // Three roses
+    // Three roses — tighter spread on mobile so they're all in view
+    const rosePositions = isMobile
+      ? [[-1.4, -1.8, 0.5], [0.0, -1.8, -0.2], [1.4, -1.8, 0.8]]
+      : [[-2.8, -1.8, 0.5], [0.0, -1.8, -0.2], [2.6, -1.8, 0.8]];
+
     const roses = [
-      buildRose(-2.8, -1.8, 0.5, 0xcc1a3a, 0x2d5a1a, 1.0),
-      buildRose(0.0,  -1.8, -0.2, 0xe8527a, 0x2a5010, 1.1),
-      buildRose(2.6,  -1.8, 0.8, 0xb01035, 0x336020, 0.95),
+      buildRose(...rosePositions[0], 0xcc1a3a, 0x2d5a1a, 1.0),
+      buildRose(...rosePositions[1], 0xe8527a, 0x2a5010, 1.1),
+      buildRose(...rosePositions[2], 0xb01035, 0x336020, 0.95),
     ];
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -442,8 +510,8 @@
         group.add(new THREE.Line(lg, lineMat));
       });
 
-      // Position and tilt the bar
-      group.position.set(5.2, 1.2, -0.5);
+      // Position and tilt the bar — centred on mobile, off to the right on desktop
+      group.position.set(isMobile ? 0.0 : 5.2, 1.2, isMobile ? 2.5 : -0.5);
       group.rotation.set(0.15, -0.4, 0.12);
 
       group.userData.floatPhase = Math.random() * Math.PI * 2;
@@ -613,10 +681,8 @@
       warmLight1.intensity = 3.5 + Math.sin(t * 1.1) * 0.5;
       fillLight.intensity  = 1.8 + Math.sin(t * 0.9 + 1) * 0.4;
 
-      // Slow camera drift
-      camera.position.x = Math.sin(t * 0.08) * 0.6;
-      camera.position.y = 2 + Math.sin(t * 0.1) * 0.3;
-      camera.lookAt(0, 1.2, 0);
+      // OrbitControls update (handles damping, touch, etc.)
+      controls.update();
 
       renderer.render(scene, camera);
     }
@@ -631,6 +697,7 @@
       camera.aspect = w / h;
       camera.updateProjectionMatrix();
       renderer.setSize(w, h);
+      controls.update();
     });
   })();
   </script>
