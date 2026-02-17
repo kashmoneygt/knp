@@ -1,0 +1,638 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Happy Valentine's Day, Pari 💕</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      overflow: hidden;
+      background: #0a0008;
+      font-family: 'Georgia', serif;
+    }
+
+    #canvas-container {
+      position: fixed;
+      inset: 0;
+    }
+
+    #overlay {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-end;
+      pointer-events: none;
+      padding-bottom: 6vh;
+      z-index: 10;
+    }
+
+    .message-box {
+      text-align: center;
+      animation: fadeInUp 2.5s ease forwards;
+      opacity: 0;
+    }
+
+    .main-message {
+      font-size: clamp(2rem, 5vw, 3.8rem);
+      font-weight: 700;
+      color: #fff;
+      text-shadow:
+        0 0 20px rgba(255, 100, 150, 0.9),
+        0 0 50px rgba(255, 80, 130, 0.6),
+        0 0 100px rgba(200, 50, 100, 0.4);
+      letter-spacing: 0.03em;
+      line-height: 1.2;
+    }
+
+    .sub-message {
+      margin-top: 1rem;
+      font-size: clamp(1rem, 2.5vw, 1.5rem);
+      color: rgba(255, 210, 230, 0.92);
+      text-shadow:
+        0 0 15px rgba(255, 130, 170, 0.7),
+        0 0 35px rgba(255, 100, 140, 0.4);
+      font-style: italic;
+      letter-spacing: 0.04em;
+    }
+
+    .divider {
+      width: 200px;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(255, 150, 190, 0.8), transparent);
+      margin: 1rem auto;
+    }
+
+    @keyframes fadeInUp {
+      0% { opacity: 0; transform: translateY(30px); }
+      100% { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Petal-shaped sparkles floating up */
+    .sparkle {
+      position: fixed;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      pointer-events: none;
+      z-index: 5;
+    }
+  </style>
+</head>
+<body>
+  <div id="canvas-container"></div>
+
+  <div id="overlay">
+    <div class="message-box">
+      <div class="main-message">Happy Valentine's Day, Pari 💕</div>
+      <div class="divider"></div>
+      <div class="sub-message">Virtual flowers &amp; chocolate —<br>the real ones are coming 😄</div>
+    </div>
+  </div>
+
+  <!-- Three.js from CDN -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+  <script>
+  (function() {
+    // ─────────────────────────────────────────────────────────────────────────
+    // SCENE SETUP
+    // ─────────────────────────────────────────────────────────────────────────
+    const container = document.getElementById('canvas-container');
+    const W = window.innerWidth, H = window.innerHeight;
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setSize(W, H);
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.2;
+    container.appendChild(renderer.domElement);
+
+    const scene = new THREE.Scene();
+    scene.fog = new THREE.FogExp2(0x0a0008, 0.04);
+
+    const camera = new THREE.PerspectiveCamera(55, W / H, 0.1, 200);
+    camera.position.set(0, 2, 12);
+    camera.lookAt(0, 1, 0);
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // STARFIELD BACKGROUND
+    // ─────────────────────────────────────────────────────────────────────────
+    (function createStarfield() {
+      const starGeo = new THREE.BufferGeometry();
+      const count = 2000;
+      const positions = new Float32Array(count * 3);
+      const colors = new Float32Array(count * 3);
+      for (let i = 0; i < count; i++) {
+        positions[i * 3]     = (Math.random() - 0.5) * 200;
+        positions[i * 3 + 1] = (Math.random() - 0.5) * 200;
+        positions[i * 3 + 2] = (Math.random() - 0.5) * 200;
+        // Warm pinkish-white stars
+        const r = 0.8 + Math.random() * 0.2;
+        const g = 0.5 + Math.random() * 0.3;
+        const b = 0.6 + Math.random() * 0.4;
+        colors[i * 3]     = r;
+        colors[i * 3 + 1] = g;
+        colors[i * 3 + 2] = b;
+      }
+      starGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+      starGeo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+      const starMat = new THREE.PointsMaterial({
+        size: 0.18,
+        vertexColors: true,
+        transparent: true,
+        opacity: 0.85,
+        sizeAttenuation: true,
+      });
+      scene.add(new THREE.Points(starGeo, starMat));
+    })();
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // LIGHTING
+    // ─────────────────────────────────────────────────────────────────────────
+    const ambientLight = new THREE.AmbientLight(0x3d0020, 1.2);
+    scene.add(ambientLight);
+
+    const warmLight1 = new THREE.PointLight(0xff6080, 3.5, 25);
+    warmLight1.position.set(-3, 6, 5);
+    warmLight1.castShadow = true;
+    scene.add(warmLight1);
+
+    const warmLight2 = new THREE.PointLight(0xffa060, 2.5, 20);
+    warmLight2.position.set(5, 4, 3);
+    scene.add(warmLight2);
+
+    const fillLight = new THREE.PointLight(0xff3060, 1.8, 30);
+    fillLight.position.set(0, -2, 8);
+    scene.add(fillLight);
+
+    const rimLight = new THREE.DirectionalLight(0xffd0e0, 0.8);
+    rimLight.position.set(-5, 10, -5);
+    scene.add(rimLight);
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // HELPER: random in range
+    // ─────────────────────────────────────────────────────────────────────────
+    const rng = (a, b) => a + Math.random() * (b - a);
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // ROSE BUILDER
+    // ─────────────────────────────────────────────────────────────────────────
+    function buildPetal(outerR, innerR, height, color) {
+      // A petal = slightly flattened cone + small sphere cap
+      const group = new THREE.Group();
+
+      const petalGeo = new THREE.ConeGeometry(outerR, height, 8, 1, false);
+      const petalMat = new THREE.MeshPhongMaterial({
+        color,
+        shininess: 60,
+        specular: new THREE.Color(0xffffff),
+        side: THREE.DoubleSide,
+        transparent: true,
+        opacity: 0.92,
+      });
+      const petal = new THREE.Mesh(petalGeo, petalMat);
+      petal.scale.set(1, 1, 0.5); // flatten it
+      group.add(petal);
+      return group;
+    }
+
+    function buildRoseHead(cx, cy, cz, baseColor) {
+      const group = new THREE.Group();
+
+      // Layers of petals, from inner to outer
+      const layers = [
+        { count: 5, radius: 0.18, tilt: 0.3, petalSize: 0.14, lift: 0.0, color: adjustColor(baseColor, 1.3) },
+        { count: 7, radius: 0.32, tilt: 0.55, petalSize: 0.19, lift: -0.08, color: baseColor },
+        { count: 9, radius: 0.50, tilt: 0.75, petalSize: 0.25, lift: -0.18, color: adjustColor(baseColor, 0.75) },
+        { count: 10, radius: 0.65, tilt: 0.90, petalSize: 0.28, lift: -0.28, color: adjustColor(baseColor, 0.60) },
+      ];
+
+      layers.forEach(({ count, radius, tilt, petalSize, lift, color }) => {
+        for (let i = 0; i < count; i++) {
+          const angle = (i / count) * Math.PI * 2;
+          const petal = buildPetal(petalSize, petalSize * 0.4, petalSize * 2.2, color);
+          petal.position.set(
+            Math.cos(angle) * radius,
+            lift,
+            Math.sin(angle) * radius
+          );
+          // Tilt outward
+          petal.rotation.z = tilt;
+          petal.rotation.y = angle + Math.PI / 2;
+          group.add(petal);
+        }
+      });
+
+      // Center bud
+      const budGeo = new THREE.SphereGeometry(0.12, 8, 8);
+      const budMat = new THREE.MeshPhongMaterial({
+        color: adjustColor(baseColor, 1.6),
+        shininess: 80,
+      });
+      group.add(new THREE.Mesh(budGeo, budMat));
+
+      group.position.set(cx, cy, cz);
+      return group;
+    }
+
+    function adjustColor(hexColor, factor) {
+      const c = new THREE.Color(hexColor);
+      c.r = Math.min(1, c.r * factor);
+      c.g = Math.min(1, c.g * factor);
+      c.b = Math.min(1, c.b * factor);
+      return c;
+    }
+
+    function buildRose(x, y, z, petalColor, stemColor, scale) {
+      const group = new THREE.Group();
+
+      // Stem
+      const stemGeo = new THREE.CylinderGeometry(0.04, 0.06, 3.5, 8);
+      const stemMat = new THREE.MeshPhongMaterial({ color: stemColor, shininess: 30 });
+      const stem = new THREE.Mesh(stemGeo, stemMat);
+      stem.position.y = 1.75 * scale;
+      stem.castShadow = true;
+      group.add(stem);
+
+      // Leaves (2 pairs)
+      const leafPositions = [
+        { hy: 0.8, angle: 0.4 },
+        { hy: 1.4, angle: -0.6 },
+        { hy: 0.6, angle: Math.PI + 0.2 },
+        { hy: 1.2, angle: Math.PI - 0.3 },
+      ];
+      leafPositions.forEach(({ hy, angle }) => {
+        const leafGeo = new THREE.SphereGeometry(0.22, 6, 4);
+        const leafMat = new THREE.MeshPhongMaterial({
+          color: 0x1a6b1a,
+          shininess: 40,
+          side: THREE.DoubleSide,
+        });
+        const leaf = new THREE.Mesh(leafGeo, leafMat);
+        leaf.scale.set(1, 0.25, 0.5);
+        leaf.position.set(Math.cos(angle) * 0.28, hy * scale, Math.sin(angle) * 0.28);
+        leaf.rotation.y = angle;
+        leaf.rotation.z = 0.5 * Math.sign(Math.cos(angle));
+        group.add(leaf);
+      });
+
+      // Rose head
+      const head = buildRoseHead(0, 3.6 * scale, 0, petalColor);
+      head.scale.setScalar(scale);
+      group.add(head);
+
+      group.position.set(x, y, z);
+      group.userData.swayPhase = Math.random() * Math.PI * 2;
+      group.userData.swaySpeed = 0.4 + Math.random() * 0.3;
+      group.userData.baseX = x;
+      group.userData.baseZ = z;
+
+      scene.add(group);
+      return group;
+    }
+
+    // Three roses
+    const roses = [
+      buildRose(-2.8, -1.8, 0.5, 0xcc1a3a, 0x2d5a1a, 1.0),
+      buildRose(0.0,  -1.8, -0.2, 0xe8527a, 0x2a5010, 1.1),
+      buildRose(2.6,  -1.8, 0.8, 0xb01035, 0x336020, 0.95),
+    ];
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // CHOCOLATE BAR
+    // ─────────────────────────────────────────────────────────────────────────
+    function makeChocolateBar() {
+      const group = new THREE.Group();
+
+      // ── Canvas texture for the label ──
+      const texCanvas = document.createElement('canvas');
+      texCanvas.width = 512;
+      texCanvas.height = 256;
+      const ctx = texCanvas.getContext('2d');
+
+      // Wrapper background: dark chocolate brown with gold edges
+      const bgGrad = ctx.createLinearGradient(0, 0, 0, 256);
+      bgGrad.addColorStop(0,   '#3d1a05');
+      bgGrad.addColorStop(0.5, '#5a2a0a');
+      bgGrad.addColorStop(1,   '#2a0f02');
+      ctx.fillStyle = bgGrad;
+      ctx.fillRect(0, 0, 512, 256);
+
+      // Gold border
+      ctx.strokeStyle = '#d4a017';
+      ctx.lineWidth = 8;
+      ctx.strokeRect(8, 8, 496, 240);
+      ctx.lineWidth = 2;
+      ctx.strokeRect(18, 18, 476, 220);
+
+      // Gold top stripe
+      const stripeGrad = ctx.createLinearGradient(0, 0, 512, 0);
+      stripeGrad.addColorStop(0,   '#8b6914');
+      stripeGrad.addColorStop(0.3, '#d4a017');
+      stripeGrad.addColorStop(0.7, '#f0c040');
+      stripeGrad.addColorStop(1,   '#8b6914');
+      ctx.fillStyle = stripeGrad;
+      ctx.fillRect(18, 18, 476, 30);
+      ctx.fillRect(18, 208, 476, 30);
+
+      // Brand name: Choceur
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+
+      // Outer glow for text
+      ctx.shadowColor = '#d4a017';
+      ctx.shadowBlur = 12;
+
+      ctx.font = 'bold italic 62px Georgia, serif';
+      const nameGrad = ctx.createLinearGradient(0, 70, 0, 130);
+      nameGrad.addColorStop(0, '#f5e09a');
+      nameGrad.addColorStop(0.5, '#ffd700');
+      nameGrad.addColorStop(1, '#c8920a');
+      ctx.fillStyle = nameGrad;
+      ctx.fillText('Choceur', 256, 100);
+
+      ctx.shadowBlur = 0;
+
+      // Divider line
+      ctx.strokeStyle = '#d4a017';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(60, 130);
+      ctx.lineTo(452, 130);
+      ctx.stroke();
+
+      // Flavor text
+      ctx.font = 'bold 22px Georgia, serif';
+      ctx.fillStyle = '#f0d080';
+      ctx.shadowColor = '#8b6000';
+      ctx.shadowBlur = 6;
+      ctx.fillText('Burnt Caramel Sea Salt', 256, 160);
+
+      // Small decorative text
+      ctx.font = '13px Georgia, serif';
+      ctx.fillStyle = '#c8a050';
+      ctx.shadowBlur = 0;
+      ctx.fillText('Dark Chocolate  ·  85g', 256, 190);
+
+      // ── Small caramel swirl decorations ──
+      function drawSwirl(cx, cy, r, color) {
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        for (let a = 0; a < Math.PI * 4; a += 0.1) {
+          const rr = r - (r / (Math.PI * 4)) * a;
+          const px = cx + Math.cos(a) * rr;
+          const py = cy + Math.sin(a) * rr;
+          a === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+        }
+        ctx.stroke();
+      }
+      drawSwirl(70, 165, 14, '#d4a017');
+      drawSwirl(442, 165, 14, '#d4a017');
+
+      const labelTex = new THREE.CanvasTexture(texCanvas);
+
+      // ── Chocolate bar geometry (rectangular box) ──
+      const barW = 3.0, barH = 1.6, barD = 0.35;
+      const boxGeo = new THREE.BoxGeometry(barW, barH, barD, 2, 2, 1);
+
+      // Segment lines on top face (chocolate squares look)
+      // We'll use a MeshPhongMaterial array for multi-face materials
+      const chocolateMat = new THREE.MeshPhongMaterial({
+        color: 0x3a1405,
+        shininess: 100,
+        specular: new THREE.Color(0x8b4513),
+      });
+      const labelMat = new THREE.MeshPhongMaterial({
+        map: labelTex,
+        shininess: 40,
+      });
+      const sideMat = new THREE.MeshPhongMaterial({
+        color: 0x2d0f03,
+        shininess: 60,
+      });
+
+      // BoxGeometry face order: +x, -x, +y, -y, +z (front), -z (back)
+      const materials = [
+        sideMat,      // right
+        sideMat,      // left
+        chocolateMat, // top
+        chocolateMat, // bottom
+        labelMat,     // front (label)
+        chocolateMat, // back
+      ];
+
+      const bar = new THREE.Mesh(boxGeo, materials);
+      bar.castShadow = true;
+      group.add(bar);
+
+      // Chocolate square grid lines on top
+      const lineMat = new THREE.LineBasicMaterial({ color: 0x1a0800, linewidth: 1 });
+      [-0.8, 0, 0.8].forEach(xOff => {
+        const lg = new THREE.BufferGeometry().setFromPoints([
+          new THREE.Vector3(xOff, barH / 2 + 0.001, -barD / 2),
+          new THREE.Vector3(xOff, barH / 2 + 0.001,  barD / 2),
+        ]);
+        group.add(new THREE.Line(lg, lineMat));
+      });
+
+      // Position and tilt the bar
+      group.position.set(5.2, 1.2, -0.5);
+      group.rotation.set(0.15, -0.4, 0.12);
+
+      group.userData.floatPhase = Math.random() * Math.PI * 2;
+      group.userData.floatSpeed = 0.6;
+
+      scene.add(group);
+      return group;
+    }
+
+    const chocoBar = makeChocolateBar();
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // FLOATING HEART PARTICLES
+    // ─────────────────────────────────────────────────────────────────────────
+    function makeHeartShape() {
+      const shape = new THREE.Shape();
+      const x = 0, y = 0;
+      shape.moveTo(x, y);
+      shape.bezierCurveTo(x, y + 0.5, x - 1, y + 0.5, x - 1, y);
+      shape.bezierCurveTo(x - 1, y - 0.7, x - 0.25, y - 1.2, x, y - 1.6);
+      shape.bezierCurveTo(x + 0.25, y - 1.2, x + 1, y - 0.7, x + 1, y);
+      shape.bezierCurveTo(x + 1, y + 0.5, x, y + 0.5, x, y);
+      return shape;
+    }
+
+    const hearts = [];
+    const heartShape = makeHeartShape();
+    const heartGeo = new THREE.ShapeGeometry(heartShape);
+
+    function spawnHeart() {
+      const mat = new THREE.MeshBasicMaterial({
+        color: new THREE.Color().setHSL(rng(0.9, 1.0), 0.9, rng(0.5, 0.7)),
+        transparent: true,
+        opacity: rng(0.5, 0.9),
+        side: THREE.DoubleSide,
+      });
+      const heart = new THREE.Mesh(heartGeo, mat);
+      const s = rng(0.04, 0.14);
+      heart.scale.setScalar(s);
+      heart.position.set(rng(-10, 10), rng(-6, -2), rng(-5, 5));
+      heart.userData = {
+        vy: rng(0.01, 0.03),
+        vx: rng(-0.005, 0.005),
+        rotSpeed: rng(-0.02, 0.02),
+        life: rng(0.008, 0.025),
+      };
+      scene.add(heart);
+      hearts.push(heart);
+    }
+
+    for (let i = 0; i < 35; i++) spawnHeart();
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // GROUND PLANE (subtle, dark)
+    // ─────────────────────────────────────────────────────────────────────────
+    const groundGeo = new THREE.PlaneGeometry(40, 40);
+    const groundMat = new THREE.MeshPhongMaterial({
+      color: 0x1a0010,
+      shininess: 20,
+      specular: 0x440022,
+    });
+    const ground = new THREE.Mesh(groundGeo, groundMat);
+    ground.rotation.x = -Math.PI / 2;
+    ground.position.y = -1.8;
+    ground.receiveShadow = true;
+    scene.add(ground);
+
+    // Subtle ground glow disc
+    const glowGeo = new THREE.CircleGeometry(4, 32);
+    const glowMat = new THREE.MeshBasicMaterial({
+      color: 0xff1050,
+      transparent: true,
+      opacity: 0.06,
+    });
+    const glow = new THREE.Mesh(glowGeo, glowMat);
+    glow.rotation.x = -Math.PI / 2;
+    glow.position.y = -1.79;
+    scene.add(glow);
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // PETAL RAIN (small oval planes floating down)
+    // ─────────────────────────────────────────────────────────────────────────
+    const petalParticles = [];
+    const petalGeo = new THREE.SphereGeometry(0.12, 5, 4);
+
+    function spawnPetalParticle() {
+      const colors = [0xff1a3a, 0xe85070, 0xff6090, 0xcc0040, 0xffa0c0];
+      const mat = new THREE.MeshBasicMaterial({
+        color: colors[Math.floor(Math.random() * colors.length)],
+        transparent: true,
+        opacity: rng(0.4, 0.8),
+      });
+      const p = new THREE.Mesh(petalGeo, mat);
+      p.scale.set(rng(0.6, 1.2), rng(0.3, 0.6), rng(0.3, 0.6));
+      p.position.set(rng(-8, 8), rng(6, 12), rng(-4, 4));
+      p.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, Math.random() * Math.PI);
+      p.userData = {
+        vy: -rng(0.015, 0.04),
+        vx: rng(-0.008, 0.008),
+        vz: rng(-0.005, 0.005),
+        rotX: rng(-0.02, 0.02),
+        rotZ: rng(-0.02, 0.02),
+      };
+      scene.add(p);
+      petalParticles.push(p);
+    }
+
+    for (let i = 0; i < 20; i++) spawnPetalParticle();
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // ANIMATE
+    // ─────────────────────────────────────────────────────────────────────────
+    let t = 0;
+
+    function animate() {
+      requestAnimationFrame(animate);
+      t += 0.016;
+
+      // Roses sway gently
+      roses.forEach((rose, i) => {
+        const phase = rose.userData.swayPhase;
+        const speed = rose.userData.swaySpeed;
+        rose.rotation.z = Math.sin(t * speed + phase) * 0.04;
+        rose.rotation.x = Math.sin(t * speed * 0.7 + phase + 1) * 0.02;
+        // Slow overall rotation of the head
+        if (rose.children.length > 0) {
+          // Find the rose head (last child added is the head)
+          const head = rose.children[rose.children.length - 1];
+          if (head) head.rotation.y = t * 0.15 + i * 1.2;
+        }
+      });
+
+      // Chocolate bar floating animation
+      chocoBar.position.y = 1.2 + Math.sin(t * chocoBar.userData.floatSpeed + chocoBar.userData.floatPhase) * 0.18;
+      chocoBar.rotation.y = -0.4 + Math.sin(t * 0.4) * 0.08;
+      chocoBar.rotation.x = 0.15 + Math.sin(t * 0.3) * 0.04;
+
+      // Heart particles float up
+      for (let i = hearts.length - 1; i >= 0; i--) {
+        const h = hearts[i];
+        h.position.y += h.userData.vy;
+        h.position.x += h.userData.vx;
+        h.rotation.z += h.userData.rotSpeed;
+        h.material.opacity -= h.userData.life;
+
+        if (h.position.y > 8 || h.material.opacity <= 0) {
+          scene.remove(h);
+          hearts.splice(i, 1);
+          spawnHeart();
+        }
+      }
+
+      // Petal rain
+      for (let i = petalParticles.length - 1; i >= 0; i--) {
+        const p = petalParticles[i];
+        p.position.y += p.userData.vy;
+        p.position.x += p.userData.vx;
+        p.position.z += p.userData.vz;
+        p.rotation.x += p.userData.rotX;
+        p.rotation.z += p.userData.rotZ;
+        if (p.position.y < -3) {
+          p.position.set(rng(-8, 8), rng(6, 12), rng(-4, 4));
+        }
+      }
+
+      // Pulse lights
+      warmLight1.intensity = 3.5 + Math.sin(t * 1.1) * 0.5;
+      fillLight.intensity  = 1.8 + Math.sin(t * 0.9 + 1) * 0.4;
+
+      // Slow camera drift
+      camera.position.x = Math.sin(t * 0.08) * 0.6;
+      camera.position.y = 2 + Math.sin(t * 0.1) * 0.3;
+      camera.lookAt(0, 1.2, 0);
+
+      renderer.render(scene, camera);
+    }
+
+    animate();
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // RESIZE
+    // ─────────────────────────────────────────────────────────────────────────
+    window.addEventListener('resize', () => {
+      const w = window.innerWidth, h = window.innerHeight;
+      camera.aspect = w / h;
+      camera.updateProjectionMatrix();
+      renderer.setSize(w, h);
+    });
+  })();
+  </script>
+</body>
+</html>
