@@ -1,0 +1,690 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pari at IKEA 🛒</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      overflow: hidden;
+      background: #0051A2;
+      font-family: 'Arial', sans-serif;
+    }
+
+    #canvas-container {
+      position: fixed;
+      inset: 0;
+    }
+
+    #overlay {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-end;
+      pointer-events: none;
+      padding-bottom: 6vh;
+      z-index: 10;
+    }
+
+    .message-box {
+      text-align: center;
+      animation: fadeInUp 2.5s ease forwards;
+      opacity: 0;
+      max-width: 90vw;
+    }
+
+    .main-message {
+      font-size: clamp(1.6rem, 5vw, 3.2rem);
+      font-weight: 900;
+      color: #FFCC00;
+      text-shadow:
+        0 0 20px rgba(0, 81, 162, 0.9),
+        0 2px 4px rgba(0,0,0,0.8);
+      letter-spacing: 0.03em;
+      line-height: 1.2;
+      padding: 0 0.5rem;
+      font-family: 'Arial Black', Arial, sans-serif;
+    }
+
+    .sub-message {
+      margin-top: 0.8rem;
+      font-size: clamp(0.85rem, 2.5vw, 1.4rem);
+      color: rgba(255, 255, 255, 0.95);
+      text-shadow:
+        0 0 10px rgba(0, 81, 162, 0.8),
+        0 2px 4px rgba(0,0,0,0.7);
+      font-style: italic;
+      letter-spacing: 0.04em;
+      padding: 0 0.5rem;
+    }
+
+    .divider {
+      width: 200px;
+      height: 3px;
+      background: linear-gradient(90deg, transparent, #FFCC00, transparent);
+      margin: 0.8rem auto;
+    }
+
+    @keyframes fadeInUp {
+      0% { opacity: 0; transform: translateY(30px); }
+      100% { opacity: 1; transform: translateY(0); }
+    }
+
+    /* IKEA logo overlay */
+    #ikea-logo {
+      position: fixed;
+      top: 1.2rem;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 20;
+      pointer-events: none;
+      animation: fadeInDown 2s ease forwards;
+      opacity: 0;
+    }
+
+    @keyframes fadeInDown {
+      0% { opacity: 0; transform: translateX(-50%) translateY(-20px); }
+      100% { opacity: 1; transform: translateX(-50%) translateY(0); }
+    }
+
+    .ikea-logo-inner {
+      background: #FFCC00;
+      border: 4px solid #0051A2;
+      border-radius: 50%;
+      width: clamp(80px, 12vw, 120px);
+      height: clamp(50px, 7.5vw, 75px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.4);
+    }
+
+    .ikea-logo-text {
+      font-family: 'Arial Black', Arial, sans-serif;
+      font-weight: 900;
+      font-size: clamp(1.2rem, 3vw, 2rem);
+      color: #0051A2;
+      letter-spacing: 0.05em;
+      line-height: 1;
+    }
+
+    /* Hint for orbit controls */
+    #hint {
+      position: fixed;
+      bottom: 1.2rem;
+      right: 1.2rem;
+      color: rgba(255, 204, 0, 0.6);
+      font-size: 0.7rem;
+      font-family: Arial, sans-serif;
+      pointer-events: none;
+      z-index: 20;
+      letter-spacing: 0.06em;
+    }
+
+    /* Mobile tweaks */
+    @media (max-width: 767px) {
+      #overlay {
+        padding-bottom: 3vh;
+      }
+      .main-message {
+        font-size: clamp(1.3rem, 6.5vw, 2rem);
+      }
+      .sub-message {
+        font-size: clamp(0.8rem, 4vw, 1.1rem);
+        margin-top: 0.5rem;
+      }
+      .divider {
+        width: 140px;
+        margin: 0.5rem auto;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="canvas-container"></div>
+
+  <!-- IKEA Logo -->
+  <div id="ikea-logo">
+    <div class="ikea-logo-inner">
+      <span class="ikea-logo-text">IKEA</span>
+    </div>
+  </div>
+
+  <div id="overlay">
+    <div class="message-box">
+      <div class="main-message">Pari at IKEA 🛒</div>
+      <div class="divider"></div>
+      <div class="sub-message">"She said she just wanted to look..."</div>
+    </div>
+  </div>
+
+  <div id="hint">drag to explore</div>
+
+  <!-- Three.js r128 from CDN -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <!-- OrbitControls matching r128 -->
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+
+  <script>
+  (function() {
+    // ─────────────────────────────────────────────────────────────────────────
+    // MOBILE DETECTION
+    // ─────────────────────────────────────────────────────────────────────────
+    const isMobile = window.innerWidth < 768;
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // SCENE SETUP
+    // ─────────────────────────────────────────────────────────────────────────
+    const container = document.getElementById('canvas-container');
+    const W = window.innerWidth, H = window.innerHeight;
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setSize(W, H);
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    container.appendChild(renderer.domElement);
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x0051A2);
+    scene.fog = new THREE.Fog(0x0051A2, 18, 40);
+
+    const camera = new THREE.PerspectiveCamera(55, W / H, 0.1, 200);
+    camera.position.set(0, 3, isMobile ? 11 : 14);
+    camera.lookAt(0, 2, 0);
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // ORBIT CONTROLS
+    // ─────────────────────────────────────────────────────────────────────────
+    const controls = new THREE.OrbitControls(camera, renderer.domElement);
+    controls.enableDamping  = true;
+    controls.dampingFactor  = 0.05;
+    controls.autoRotate     = false;
+    controls.target.set(0, 2, 0);
+    controls.minPolarAngle = Math.PI * 0.1;
+    controls.maxPolarAngle = Math.PI * 0.75;
+    controls.update();
+
+    // Fade hint after interaction
+    const hint = document.getElementById('hint');
+    renderer.domElement.addEventListener('pointerdown', () => {
+      hint.style.transition = 'opacity 1s';
+      hint.style.opacity = '0';
+    }, { once: true });
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // LIGHTING — bright fluorescent store style
+    // ─────────────────────────────────────────────────────────────────────────
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.9);
+    scene.add(ambientLight);
+
+    const dirLight1 = new THREE.DirectionalLight(0xeeeeff, 1.2);
+    dirLight1.position.set(5, 15, 5);
+    dirLight1.castShadow = true;
+    dirLight1.shadow.camera.near = 0.5;
+    dirLight1.shadow.camera.far = 60;
+    dirLight1.shadow.camera.left = -20;
+    dirLight1.shadow.camera.right = 20;
+    dirLight1.shadow.camera.top = 20;
+    dirLight1.shadow.camera.bottom = -20;
+    dirLight1.shadow.mapSize.set(2048, 2048);
+    scene.add(dirLight1);
+
+    const dirLight2 = new THREE.DirectionalLight(0xddeeff, 0.6);
+    dirLight2.position.set(-8, 10, -5);
+    scene.add(dirLight2);
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // FLOOR & WALLS
+    // ─────────────────────────────────────────────────────────────────────────
+    // Floor — light grey tile like IKEA
+    const floorGeo = new THREE.PlaneGeometry(40, 40);
+    const floorMat = new THREE.MeshLambertMaterial({ color: 0xdde0e4 });
+    const floor = new THREE.Mesh(floorGeo, floorMat);
+    floor.rotation.x = -Math.PI / 2;
+    floor.receiveShadow = true;
+    scene.add(floor);
+
+    // Tile lines
+    for (let i = -10; i <= 10; i++) {
+      const lineGeoH = new THREE.PlaneGeometry(40, 0.04);
+      const lineMat = new THREE.MeshBasicMaterial({ color: 0xbbbbbb });
+      const lineH = new THREE.Mesh(lineGeoH, lineMat);
+      lineH.rotation.x = -Math.PI / 2;
+      lineH.position.set(0, 0.001, i * 1.5);
+      scene.add(lineH);
+
+      const lineGeoV = new THREE.PlaneGeometry(0.04, 40);
+      const lineV = new THREE.Mesh(lineGeoV, lineMat);
+      lineV.rotation.x = -Math.PI / 2;
+      lineV.position.set(i * 1.5, 0.001, 0);
+      scene.add(lineV);
+    }
+
+    // Back wall — IKEA blue
+    const backWallGeo = new THREE.PlaneGeometry(40, 16);
+    const backWallMat = new THREE.MeshLambertMaterial({ color: 0x0051A2, side: THREE.FrontSide });
+    const backWall = new THREE.Mesh(backWallGeo, backWallMat);
+    backWall.position.set(0, 8, -12);
+    scene.add(backWall);
+
+    // Yellow accent stripe on wall
+    const stripeGeo = new THREE.PlaneGeometry(40, 0.6);
+    const stripeMat = new THREE.MeshBasicMaterial({ color: 0xFFCC00 });
+    const stripe = new THREE.Mesh(stripeGeo, stripeMat);
+    stripe.position.set(0, 2.5, -11.9);
+    scene.add(stripe);
+
+    // Side wall left
+    const sideWallGeo = new THREE.PlaneGeometry(24, 16);
+    const sideWall = new THREE.Mesh(sideWallGeo, backWallMat);
+    sideWall.rotation.y = Math.PI / 2;
+    sideWall.position.set(-10, 8, 0);
+    scene.add(sideWall);
+
+    // Ceiling
+    const ceilGeo = new THREE.PlaneGeometry(40, 30);
+    const ceilMat = new THREE.MeshLambertMaterial({ color: 0xfafafa });
+    const ceil = new THREE.Mesh(ceilGeo, ceilMat);
+    ceil.rotation.x = Math.PI / 2;
+    ceil.position.set(0, 14, 0);
+    scene.add(ceil);
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // HELPER: createPriceTagTexture
+    // ─────────────────────────────────────────────────────────────────────────
+    function createPriceTagTexture(price) {
+      const canvas = document.createElement('canvas');
+      canvas.width = 256; canvas.height = 160;
+      const ctx = canvas.getContext('2d');
+      // Yellow background
+      ctx.fillStyle = '#FFCC00';
+      ctx.fillRect(0, 0, 256, 160);
+      // Black border
+      ctx.strokeStyle = '#000000';
+      ctx.lineWidth = 6;
+      ctx.strokeRect(3, 3, 250, 154);
+      // Price text
+      ctx.fillStyle = '#000000';
+      ctx.font = 'bold 52px Arial Black, Arial';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(price, 128, 72);
+      // Small "IKEA" label
+      ctx.font = 'bold 22px Arial';
+      ctx.fillStyle = '#0051A2';
+      ctx.fillText('IKEA', 128, 132);
+      const tex = new THREE.CanvasTexture(canvas);
+      tex.encoding = THREE.sRGBEncoding;
+      return tex;
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // HELPER: createCardboardTexture
+    // ─────────────────────────────────────────────────────────────────────────
+    function createCardboardTexture(label) {
+      const canvas = document.createElement('canvas');
+      canvas.width = 256; canvas.height = 128;
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#c8a86b';
+      ctx.fillRect(0, 0, 256, 128);
+      // stripes
+      ctx.strokeStyle = '#b09050';
+      ctx.lineWidth = 2;
+      for (let i = 0; i < 256; i += 16) {
+        ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, 128); ctx.stroke();
+      }
+      // label
+      ctx.fillStyle = '#FFFFFF';
+      ctx.fillRect(40, 30, 176, 68);
+      ctx.fillStyle = '#0051A2';
+      ctx.font = 'bold 20px Arial Black, Arial';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('IKEA', 128, 52);
+      ctx.font = '14px Arial';
+      ctx.fillStyle = '#333';
+      ctx.fillText(label, 128, 76);
+      const tex = new THREE.CanvasTexture(canvas);
+      tex.encoding = THREE.sRGBEncoding;
+      return tex;
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // PARI'S PHOTO
+    // ─────────────────────────────────────────────────────────────────────────
+    const textureLoader = new THREE.TextureLoader();
+    textureLoader.load('pari.jpg', function(texture) {
+      texture.encoding = THREE.sRGBEncoding;
+      // Photo is portrait ~3:4 ratio
+      const photoW = 2.4, photoH = 4.2;
+      const photoGeo = new THREE.PlaneGeometry(photoW, photoH);
+      const photoMat = new THREE.MeshBasicMaterial({ map: texture, side: THREE.DoubleSide });
+      const photo = new THREE.Mesh(photoGeo, photoMat);
+      photo.position.set(-1.8, photoH / 2 + 0.02, 0);
+      photo.rotation.y = 0.2; // slightly tilted
+      // Drop shadow base
+      const shadowGeo = new THREE.PlaneGeometry(photoW * 0.9, 0.15);
+      const shadowMat = new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.25 });
+      const shadow = new THREE.Mesh(shadowGeo, shadowMat);
+      shadow.rotation.x = -Math.PI / 2;
+      shadow.position.set(-1.8, 0.01, 0.15);
+      scene.add(photo);
+      scene.add(shadow);
+    });
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // KALLAX SHELF UNIT (4x2 grid of boxes)
+    // ─────────────────────────────────────────────────────────────────────────
+    const kallaxGroup = new THREE.Group();
+    const kallaxMat = new THREE.MeshLambertMaterial({ color: 0xf2ede4 }); // birch white
+    const innerMat = new THREE.MeshLambertMaterial({ color: 0xe0d9cc });
+    const cellSize = 0.82;
+    const wallT = 0.06;
+
+    // Build 4-wide x 2-tall Kallax
+    for (let col = 0; col < 4; col++) {
+      for (let row = 0; row < 2; row++) {
+        // inner back panel
+        const backGeo = new THREE.BoxGeometry(cellSize, cellSize, wallT);
+        const back = new THREE.Mesh(backGeo, innerMat);
+        back.position.set(col * (cellSize + wallT), row * (cellSize + wallT) + cellSize / 2 + wallT, 0);
+        kallaxGroup.add(back);
+      }
+    }
+    // Outer frame: bottom, top, sides, verticals
+    const totalW = 4 * (cellSize + wallT) + wallT;
+    const totalH = 2 * (cellSize + wallT) + wallT;
+
+    // Horizontal shelves
+    for (let row = 0; row <= 2; row++) {
+      const shelfGeo = new THREE.BoxGeometry(totalW, wallT, 0.38);
+      const shelf = new THREE.Mesh(shelfGeo, kallaxMat);
+      shelf.position.set(totalW / 2 - wallT / 2, row * (cellSize + wallT), 0.15);
+      shelf.castShadow = true; shelf.receiveShadow = true;
+      kallaxGroup.add(shelf);
+    }
+    // Vertical dividers
+    for (let col = 0; col <= 4; col++) {
+      const divGeo = new THREE.BoxGeometry(wallT, totalH, 0.38);
+      const div = new THREE.Mesh(divGeo, kallaxMat);
+      div.position.set(col * (cellSize + wallT), totalH / 2, 0.15);
+      div.castShadow = true; div.receiveShadow = true;
+      kallaxGroup.add(div);
+    }
+
+    kallaxGroup.position.set(3.5, 0, -3);
+    scene.add(kallaxGroup);
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // BILLY BOOKCASE (tall white rectangle)
+    // ─────────────────────────────────────────────────────────────────────────
+    const billyGroup = new THREE.Group();
+    const billyMat = new THREE.MeshLambertMaterial({ color: 0xf9f9f7 });
+    // Main body
+    const billyBody = new THREE.Mesh(new THREE.BoxGeometry(0.9, 5.0, 0.3), billyMat);
+    billyBody.position.set(0, 2.5, 0);
+    billyBody.castShadow = true; billyBody.receiveShadow = true;
+    billyGroup.add(billyBody);
+    // Shelves inside
+    for (let i = 1; i < 5; i++) {
+      const bShelf = new THREE.Mesh(new THREE.BoxGeometry(0.84, 0.03, 0.26), new THREE.MeshLambertMaterial({ color: 0xe8e8e4 }));
+      bShelf.position.set(0, i * 0.9 + 0.1, 0);
+      billyGroup.add(bShelf);
+    }
+    // A few "books" on shelves (coloured slabs)
+    const bookColors = [0xff5733, 0x28a745, 0x007bff, 0xfd7e14, 0x6f42c1];
+    for (let i = 0; i < 5; i++) {
+      const bk = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.25, 0.2), new THREE.MeshLambertMaterial({ color: bookColors[i % bookColors.length] }));
+      bk.position.set(-0.3 + i * 0.13, i % 2 === 0 ? 1.8 : 2.7, 0);
+      billyGroup.add(bk);
+    }
+    billyGroup.position.set(7.2, 0, -4);
+    scene.add(billyGroup);
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // POÄNG CHAIR
+    // ─────────────────────────────────────────────────────────────────────────
+    const poangGroup = new THREE.Group();
+    const frameMat = new THREE.MeshLambertMaterial({ color: 0x7b4f24 }); // brown
+    const cushionMat = new THREE.MeshLambertMaterial({ color: 0xffe0c0 }); // light cushion
+
+    // Seat cushion
+    const seat = new THREE.Mesh(new THREE.BoxGeometry(0.72, 0.16, 0.62), cushionMat);
+    seat.position.set(0, 0.56, 0);
+    poangGroup.add(seat);
+    // Back cushion
+    const back = new THREE.Mesh(new THREE.BoxGeometry(0.70, 0.80, 0.12), cushionMat);
+    back.position.set(0, 1.0, -0.22);
+    back.rotation.x = -0.15;
+    poangGroup.add(back);
+    // Frame legs (4 cylinders)
+    [[-0.3, 0, -0.25], [0.3, 0, -0.25], [-0.3, 0, 0.25], [0.3, 0, 0.25]].forEach(([x, y, z]) => {
+      const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.55, 8), frameMat);
+      leg.position.set(x, 0.275, z);
+      poangGroup.add(leg);
+    });
+    // Back uprights
+    [-0.3, 0.3].forEach(x => {
+      const up = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 1.3, 8), frameMat);
+      up.position.set(x, 1.0, -0.25);
+      up.rotation.x = 0.15;
+      poangGroup.add(up);
+    });
+    // Armrests
+    [-0.36, 0.36].forEach(x => {
+      const arm = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.06, 0.58), frameMat);
+      arm.position.set(x, 0.7, -0.04);
+      poangGroup.add(arm);
+    });
+
+    poangGroup.position.set(5.5, 0, 1.5);
+    poangGroup.rotation.y = -0.6;
+    scene.add(poangGroup);
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // FLAT-PACK CARDBOARD BOXES ON FLOOR
+    // ─────────────────────────────────────────────────────────────────────────
+    const boxLabels = ['KALLAX', 'BILLY', 'LACK'];
+    const boxConfigs = [
+      { pos: [1.5, 0.12, 2.5], size: [1.1, 0.24, 0.6], rot: 0.3 },
+      { pos: [2.8, 0.12, 2.8], size: [1.4, 0.24, 0.55], rot: -0.2 },
+      { pos: [2.2, 0.36, 2.6], size: [1.0, 0.20, 0.5], rot: 0.1 },
+    ];
+
+    boxConfigs.forEach((cfg, i) => {
+      const cardTex = createCardboardTexture(boxLabels[i]);
+      const boxMats = [
+        new THREE.MeshLambertMaterial({ color: 0xc8a86b }),
+        new THREE.MeshLambertMaterial({ color: 0xc8a86b }),
+        new THREE.MeshLambertMaterial({ map: cardTex }),
+        new THREE.MeshLambertMaterial({ color: 0xb09050 }),
+        new THREE.MeshLambertMaterial({ map: cardTex }),
+        new THREE.MeshLambertMaterial({ color: 0xb09050 }),
+      ];
+      const box = new THREE.Mesh(new THREE.BoxGeometry(...cfg.size), boxMats);
+      box.position.set(...cfg.pos);
+      box.rotation.y = cfg.rot;
+      box.castShadow = true; box.receiveShadow = true;
+      scene.add(box);
+    });
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // SHOPPING CART
+    // ─────────────────────────────────────────────────────────────────────────
+    const cartGroup = new THREE.Group();
+    const cartMat = new THREE.MeshLambertMaterial({ color: 0xaaaaaa, wireframe: false });
+    const cartEdgeMat = new THREE.MeshBasicMaterial({ color: 0x888888, wireframe: true });
+
+    // Cart basket (wireframe box)
+    const basketGeo = new THREE.BoxGeometry(1.1, 0.7, 0.65);
+    const basket = new THREE.Mesh(basketGeo, cartEdgeMat);
+    basket.position.set(0, 1.0, 0);
+    cartGroup.add(basket);
+
+    // Cart frame bars
+    const barMat = new THREE.MeshLambertMaterial({ color: 0x999999 });
+    // Handle
+    const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 1.2, 8), barMat);
+    handle.rotation.z = Math.PI / 2;
+    handle.position.set(0, 1.45, -0.38);
+    cartGroup.add(handle);
+    // Handle uprights
+    [-0.55, 0.55].forEach(x => {
+      const up = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 0.5, 8), barMat);
+      up.position.set(x, 1.22, -0.38);
+      cartGroup.add(up);
+    });
+    // Legs
+    [[-0.48, -0.28], [0.48, -0.28], [-0.48, 0.28], [0.48, 0.28]].forEach(([x, z]) => {
+      const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.67, 8), barMat);
+      leg.position.set(x, 0.33, z);
+      cartGroup.add(leg);
+    });
+    // Wheels
+    [[-0.5, -0.3], [0.5, -0.3], [-0.5, 0.3], [0.5, 0.3]].forEach(([x, z]) => {
+      const wheel = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 0.06, 12), new THREE.MeshLambertMaterial({ color: 0x444444 }));
+      wheel.rotation.z = Math.PI / 2;
+      wheel.position.set(x, 0.1, z);
+      cartGroup.add(wheel);
+    });
+    // A flat box inside the cart
+    const inCart = new THREE.Mesh(
+      new THREE.BoxGeometry(0.9, 0.18, 0.55),
+      new THREE.MeshLambertMaterial({ color: 0xc8a86b })
+    );
+    inCart.position.set(0, 0.74, 0);
+    cartGroup.add(inCart);
+
+    cartGroup.position.set(-4.5, 0, 1.5);
+    cartGroup.rotation.y = 0.4;
+    scene.add(cartGroup);
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // FLOATING PRICE TAGS
+    // ─────────────────────────────────────────────────────────────────────────
+    const pricePrices = ['99¢', '$4.99', '$299', '$12.99', '$49'];
+    const pricePositions = [
+      [3.6, 2.6, -2.8],
+      [6.8, 2.5, -3.8],
+      [5.3, 3.0, 1.8],
+      [-4.2, 2.8, 1.2],
+      [1.2, 3.4, -1.5],
+    ];
+    const priceTags = [];
+    pricePrices.forEach((price, i) => {
+      const tagTex = createPriceTagTexture(price);
+      const tagGeo = new THREE.PlaneGeometry(0.6, 0.38);
+      const tagMat = new THREE.MeshBasicMaterial({ map: tagTex, side: THREE.DoubleSide });
+      const tag = new THREE.Mesh(tagGeo, tagMat);
+      tag.position.set(...pricePositions[i]);
+      tag.userData.baseY = pricePositions[i][1];
+      tag.userData.phase = i * 1.2;
+      scene.add(tag);
+      priceTags.push(tag);
+    });
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // FLOATING MEATBALLS 🍝
+    // ─────────────────────────────────────────────────────────────────────────
+    const meatballMat = new THREE.MeshLambertMaterial({ color: 0x7a3e1a });
+    const meatballPositions = [
+      [-3, 3.5, -1], [1.5, 4.2, -2], [-0.5, 5.0, 1], [4, 3.8, -1.5], [-2.5, 4.8, 2],
+    ];
+    const meatballs = [];
+    meatballPositions.forEach((pos, i) => {
+      const radius = 0.12 + Math.random() * 0.08;
+      const ball = new THREE.Mesh(new THREE.SphereGeometry(radius, 12, 12), meatballMat);
+      ball.position.set(...pos);
+      ball.userData.baseY = pos[1];
+      ball.userData.phase = i * 1.4;
+      ball.userData.rotSpeed = (Math.random() - 0.5) * 0.02;
+      scene.add(ball);
+      meatballs.push(ball);
+    });
+
+    // Sauce drips (tiny orange spheres nearby)
+    const sauceMat = new THREE.MeshLambertMaterial({ color: 0xcc3300 });
+    meatballPositions.forEach((pos, i) => {
+      if (i % 2 === 0) {
+        const drip = new THREE.Mesh(new THREE.SphereGeometry(0.04, 8, 8), sauceMat);
+        drip.position.set(pos[0] + 0.15, pos[1] - 0.18, pos[2] + 0.1);
+        scene.add(drip);
+      }
+    });
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // SWEDISH FLAG BANNER (yellow cross on blue)
+    // ─────────────────────────────────────────────────────────────────────────
+    const bannerCanvas = document.createElement('canvas');
+    bannerCanvas.width = 256; bannerCanvas.height = 160;
+    const bctx = bannerCanvas.getContext('2d');
+    bctx.fillStyle = '#006AA7';
+    bctx.fillRect(0, 0, 256, 160);
+    bctx.fillStyle = '#FECC02';
+    bctx.fillRect(76, 0, 40, 160);
+    bctx.fillRect(0, 60, 256, 40);
+    const bannerTex = new THREE.CanvasTexture(bannerCanvas);
+    bannerTex.encoding = THREE.sRGBEncoding;
+    const banner = new THREE.Mesh(
+      new THREE.PlaneGeometry(1.6, 1.0),
+      new THREE.MeshBasicMaterial({ map: bannerTex, side: THREE.DoubleSide })
+    );
+    banner.position.set(-7.5, 5.5, -1);
+    scene.add(banner);
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // SOME DECORATIVE YELLOW ACCENTS ON WALL
+    // ─────────────────────────────────────────────────────────────────────────
+    const accentMat = new THREE.MeshBasicMaterial({ color: 0xFFCC00 });
+    // Small squares on back wall
+    [[-6, 6], [-2, 7], [3, 5.5], [7, 6.5]].forEach(([x, y]) => {
+      const sq = new THREE.Mesh(new THREE.PlaneGeometry(0.5, 0.5), accentMat);
+      sq.position.set(x, y, -11.85);
+      scene.add(sq);
+    });
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // ANIMATE
+    // ─────────────────────────────────────────────────────────────────────────
+    function animate(t) {
+      requestAnimationFrame(animate);
+      const secs = t * 0.001;
+
+      // Floating price tags
+      priceTags.forEach(tag => {
+        tag.position.y = tag.userData.baseY + Math.sin(secs * 1.1 + tag.userData.phase) * 0.12;
+        tag.rotation.z = Math.sin(secs * 0.7 + tag.userData.phase) * 0.08;
+        tag.rotation.y = secs * 0.4 + tag.userData.phase; // spin to face camera-ish
+      });
+
+      // Floating meatballs
+      meatballs.forEach(ball => {
+        ball.position.y = ball.userData.baseY + Math.sin(secs * 0.8 + ball.userData.phase) * 0.22;
+        ball.rotation.x += ball.userData.rotSpeed;
+        ball.rotation.y += ball.userData.rotSpeed * 0.7;
+      });
+
+      controls.update();
+      renderer.render(scene, camera);
+    }
+    animate(0);
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // RESIZE
+    // ─────────────────────────────────────────────────────────────────────────
+    window.addEventListener('resize', () => {
+      const W2 = window.innerWidth, H2 = window.innerHeight;
+      camera.aspect = W2 / H2;
+      camera.updateProjectionMatrix();
+      renderer.setSize(W2, H2);
+    });
+
+  })();
+  </script>
+</body>
+</html>
